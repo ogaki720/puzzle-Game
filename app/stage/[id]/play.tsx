@@ -36,6 +36,17 @@ export default function PlayRoute() {
   const boardSize = Math.min(dims.width - 24, 460);
 
   const anims = usePieceAnimations();
+
+  // Stable refs so useEffects don't re-fire when callbacks change identity
+  const animsRef = useRef(anims);
+  animsRef.current = anims;
+  const setAnimatingRef = useRef(setAnimating);
+  setAnimatingRef.current = setAnimating;
+  const resetRef = useRef(reset);
+  resetRef.current = reset;
+  const startStageRef = useRef(startStage);
+  startStageRef.current = startStage;
+
   const lastEventsRef = useRef(lastEvents);
 
   // Trigger animation whenever lastEvents changes
@@ -46,19 +57,25 @@ export default function PlayRoute() {
     const wasAccepted = lastEvents.some((e) => e.type === "swap-attempt" && e.accepted);
     if (!wasAccepted) return;
 
-    setAnimating(true);
-    anims.playTurnAnimation(lastEvents, () => {
-      setAnimating(false);
+    setAnimatingRef.current(true);
+    animsRef.current.playTurnAnimation(lastEvents, () => {
+      setAnimatingRef.current(false);
     });
-  }, [lastEvents, anims, setAnimating]);
+  }, [lastEvents]); // only lastEvents as dep — all others accessed via stable refs
 
+  // Start stage when stageId changes; cleanup on unmount only
   useEffect(() => {
-    if (stage) {
-      startStage(stage);
-      anims.resetAll();
-    }
-    return () => reset();
-  }, [stage, startStage, reset, anims]);
+    if (!stage) return;
+    startStageRef.current(stage);
+    animsRef.current.resetAll();
+  }, [stage]); // stage is stable (derived from stageId via useMemo)
+
+  // Unmount cleanup — separate effect so it only runs once
+  useEffect(() => {
+    return () => {
+      resetRef.current();
+    };
+  }, []);
 
   if (!stage) {
     return (
