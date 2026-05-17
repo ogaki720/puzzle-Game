@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "もちポップ",
+    "slug": "mochipop",
+    "scheme": "mochipop",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mochipop.app"
+    },
+    "android": {
+      "package": "com.mochipop.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#FFE9F0"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFE9F0",
+          "imageWidth": 200
+        }
+      ],
+      "expo-audio",
+      "expo-image",
+      "expo-localization"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
