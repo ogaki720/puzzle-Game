@@ -10,6 +10,13 @@ import {
   type SpawnWeights,
   type TurnEvent,
 } from "@/features/game/domain";
+import {
+  getDdaWeights,
+  hasUsedFreePlus5,
+  markFreePlus5Used,
+  recordFailure,
+  recordSuccess,
+} from "./dda.store";
 
 export type StageStatus = "idle" | "ready" | "playing" | "win" | "lose";
 
@@ -41,9 +48,12 @@ interface GameSessionState {
   chainCount: number;
   lastEvents: TurnEvent[];
   isAnimating: boolean;
+  showFreePlus5: boolean;  // true → show "+5手 (無料)" dialog
 
   startStage: (config: StageConfig) => void;
   trySwap: (a: Position, b: Position) => boolean;
+  applyFreePlus5: () => void;
+  dismissFreePlus5: () => void;
   setAnimating: (animating: boolean) => void;
   reset: () => void;
 }
@@ -56,21 +66,28 @@ const INITIAL_STATE = {
   collected: {},
   status: "idle" as StageStatus,
   chainCount: 0,
-  lastEvents: [],
+  lastEvents: [] as TurnEvent[],
   isAnimating: false,
+  showFreePlus5: false,
 };
 
 export const useGameSession = create<GameSessionState>((set, get) => ({
   ...INITIAL_STATE,
 
   startStage(config) {
+    const goalColors =
+      config.goal.type === "collect"
+        ? Object.keys(config.goal.targets ?? {})
+        : [];
+    const ddaWeights = getDdaWeights(config.id, config.spawnWeights, goalColors);
+
     const seed = config.seed ?? `${config.id}:${Date.now()}`;
     const rng = createRng(seed);
     const board = createBoard({
       width: config.width,
       height: config.height,
       rng,
-      spawnWeights: config.spawnWeights,
+      spawnWeights: ddaWeights ?? config.spawnWeights,
       ensureNoInitialMatch: true,
     });
     set({
@@ -102,7 +119,6 @@ export const useGameSession = create<GameSessionState>((set, get) => ({
       return false;
     }
 
-    // Update collected from match events
     const collected = { ...state.collected };
     for (const e of result.events) {
       if (e.type === "match") {
@@ -115,6 +131,18 @@ export const useGameSession = create<GameSessionState>((set, get) => ({
     const won = checkWin(state.stage, score, collected);
     const lost = !won && movesLeft <= 0;
 
+    if (won) recordSuccess(state.stage.id);
+
+    // Check if free +5 should be offered (first time, movesLeft hits 0)
+    const showFreePlus5 =
+      lost &&
+      !hasUsedFreePlus5(state.stage.id);
+
+    if (lost && !showFreePlus5) {
+      // No free +5 available — record failure for DDA
+      recordFailure(state.stage.id);
+    }
+
     set({
       board: result.board,
       score,
@@ -122,9 +150,26 @@ export const useGameSession = create<GameSessionState>((set, get) => ({
       collected,
       chainCount: result.chainCount,
       lastEvents: result.events,
-      status: won ? "win" : lost ? "lose" : "playing",
+      status: won ? "win" : lost && !showFreePlus5 ? "lose" : "playing",
+      showFreePlus5,
     });
     return true;
+  },
+
+  applyFreePlus5() {
+    const { stage, movesLeft } = get();
+    if (!stage) return;
+    markFreePlus5Used(stage.id);
+    set({ movesLeft: movesLeft + 5, showFreePlus5: false, status: "playing" });
+  },
+
+  dismissFreePlus5() {
+    const { stage } = get();
+    if (stage) {
+      markFreePlus5Used(stage.id); // mark used so it won't show again
+      recordFailure(stage.id);
+    }
+    set({ showFreePlus5: false, status: "lose" });
   },
 
   setAnimating(animating) {

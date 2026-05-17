@@ -3,6 +3,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 
 import { colors } from "@/core/theme/colors";
+import { Mascot } from "@/features/game/render/mascot";
 
 export default function MenuRoute() {
   return (
@@ -11,27 +12,13 @@ export default function MenuRoute() {
         <View style={styles.titleBlock}>
           <Text style={styles.title}>もちポップ</Text>
           <Text style={styles.subtitle}>もちもちアニマルが、ぷにっと弾ける。</Text>
+          <Mascot size={80} />
         </View>
 
         <View style={styles.buttons}>
-          <PrimaryButton
-            label="はじめる"
-            onPress={() => {
-              router.push("/map");
-            }}
-          />
-          <SecondaryButton
-            label="ずかん"
-            onPress={() => {
-              router.push("/codex");
-            }}
-          />
-          <SecondaryButton
-            label="せってい"
-            onPress={() => {
-              router.push("/settings");
-            }}
-          />
+          <PrimaryButton label="はじめる" onPress={() => router.push("/map")} />
+          <SecondaryButton label="ずかん" onPress={() => router.push("/codex")} />
+          <SecondaryButton label="せってい" onPress={() => router.push("/settings")} />
         </View>
 
         <Text style={styles.version}>v0.1.0</Text>
@@ -40,10 +27,7 @@ export default function MenuRoute() {
   );
 }
 
-type ButtonProps = {
-  label: string;
-  onPress: () => void;
-};
+type ButtonProps = { label: string; onPress: () => void };
 
 function PrimaryButton({ label, onPress }: ButtonProps) {
   return (
@@ -72,10 +56,7 @@ function SecondaryButton({ label, onPress }: ButtonProps) {
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
+  safe: { flex: 1, backgroundColor: colors.bg },
   container: {
     flex: 1,
     paddingHorizontal: 32,
@@ -87,10 +68,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
+    gap: 16,
   },
   title: {
-    fontSize: 56,
+    fontSize: 52,
     fontWeight: "800",
     color: colors.accent,
     letterSpacing: 2,
@@ -115,11 +96,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  btnPrimaryText: {
-    color: "white",
-    fontSize: 20,
-    fontWeight: "700",
-  },
+  btnPrimaryText: { color: "white", fontSize: 20, fontWeight: "700" },
   btnSecondary: {
     backgroundColor: "white",
     paddingVertical: 14,
@@ -128,17 +105,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.accentSoft,
   },
-  btnSecondaryText: {
-    color: colors.accent,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  btnPressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.98 }],
-  },
-  version: {
-    fontSize: 12,
-    color: colors.inkSoft,
-  },
+  btnSecondaryText: { color: colors.accent, fontSize: 16, fontWeight: "600" },
+  btnPressed: { opacity: 0.7, transform: [{ scale: 0.98 }] },
+  version: { fontSize: 12, color: colors.inkSoft },
 });

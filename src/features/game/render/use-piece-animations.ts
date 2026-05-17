@@ -2,11 +2,11 @@ import { useCallback } from "react";
 import { Easing, useSharedValue, withTiming } from "react-native-reanimated";
 
 import type { TurnEvent } from "@/features/game/domain";
-
-// Timings from design.md § 17 (juicy spec)
-const ERASE_TOTAL_MS = 260;
-const REFILL_DELAY_MS = 40;
-const REFILL_TOTAL_MS = 200;
+import {
+  ERASE_TOTAL_MS,
+  REFILL_DELAY_MS,
+  REFILL_MS as REFILL_TOTAL_MS,
+} from "@/core/juicy";
 
 /**
  * eraseProgress 0→1: matched cells fade out

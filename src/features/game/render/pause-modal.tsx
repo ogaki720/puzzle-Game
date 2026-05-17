@@ -41,9 +41,13 @@ export function ResultModal({ visible, won, score, stars, onRetry, onNext, onQui
     <Modal transparent animationType="fade" visible={visible}>
       <View style={styles.backdrop}>
         <View style={styles.card}>
+          <Text style={styles.mascotEmoji}>{won ? "🎉" : "🥺"}</Text>
           <Text style={[styles.title, won ? styles.titleWin : styles.titleLose]}>
-            {won ? "クリア！" : "ざんねん"}
+            {won ? "クリア！" : "ざんねん…"}
           </Text>
+          {!won && (
+            <Text style={styles.encouragement}>つぎはきっとできるよ！</Text>
+          )}
           {won && (
             <View style={styles.starRow}>
               {[1, 2, 3].map((i) => (
@@ -156,5 +160,15 @@ const styles = StyleSheet.create({
   btnPressed: {
     opacity: 0.7,
     transform: [{ scale: 0.98 }],
+  },
+  mascotEmoji: {
+    fontSize: 52,
+    textAlign: "center",
+  },
+  encouragement: {
+    fontSize: 14,
+    color: colors.inkSoft,
+    fontWeight: "600",
+    textAlign: "center",
   },
 });

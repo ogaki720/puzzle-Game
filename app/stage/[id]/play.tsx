@@ -7,10 +7,13 @@ import { colors } from "@/core/theme/colors";
 import { BoardCanvas } from "@/features/game/render/board-canvas";
 import { BoardGestureLayer } from "@/features/game/render/board-gestures";
 import { Hud } from "@/features/game/render/hud";
+import { Mascot } from "@/features/game/render/mascot";
 import { PauseModal, ResultModal } from "@/features/game/render/pause-modal";
+import { SpecialDebutNotice } from "@/features/game/render/special-debut";
 import { usePieceAnimations } from "@/features/game/render/use-piece-animations";
-import { findStage } from "@/features/game/stages/sample-stages";
+import { findStage, isOnboardingStage } from "@/features/game/stages/sample-stages";
 import { starsForScore, useGameSession } from "@/features/game/state/game-session.store";
+import { useMascot } from "@/features/game/state/mascot.store";
 import type { PieceColor, Position } from "@/features/game/domain";
 
 export default function PlayRoute() {
@@ -29,13 +32,28 @@ export default function PlayRoute() {
   const trySwap = useGameSession((s) => s.trySwap);
   const setAnimating = useGameSession((s) => s.setAnimating);
   const reset = useGameSession((s) => s.reset);
+  const showFreePlus5 = useGameSession((s) => s.showFreePlus5);
+  const applyFreePlus5 = useGameSession((s) => s.applyFreePlus5);
+  const dismissFreePlus5 = useGameSession((s) => s.dismissFreePlus5);
 
   const [selected, setSelected] = useState<Position | null>(null);
   const [paused, setPaused] = useState(false);
+  const [debutDismissed, setDebutDismissed] = useState(false);
   const dims = useWindowDimensions();
   const boardSize = Math.min(dims.width - 24, 460);
 
   const anims = usePieceAnimations();
+  const mascotCheer = useMascot((s) => s.cheer);
+  const mascotSad = useMascot((s) => s.sad);
+
+  // Mascot reacts to win/lose
+  const prevStatus = useRef(status);
+  useEffect(() => {
+    if (status === prevStatus.current) return;
+    prevStatus.current = status;
+    if (status === "win") mascotCheer();
+    if (status === "lose") mascotSad();
+  }, [status, mascotCheer, mascotSad]);
 
   // Stable refs so useEffects don't re-fire when callbacks change identity
   const animsRef = useRef(anims);
@@ -77,6 +95,37 @@ export default function PlayRoute() {
     };
   }, []);
 
+  // goalProgress and nearMiss must be computed before any early returns (Rules of Hooks)
+  const goalProgress = useMemo(
+    () =>
+      stage?.goal.type === "collect"
+        ? Object.entries(stage.goal.targets ?? {}).map(([color, need]) => ({
+            color: color as PieceColor,
+            current: collected[color] ?? 0,
+            need: need ?? 0,
+          }))
+        : [],
+    [stage, collected],
+  );
+
+  const nearMiss = useMemo(() => {
+    if (status !== "lose" || !stage) return false;
+    if (stage.goal.type === "collect") {
+      const total = Object.values(stage.goal.targets ?? {}).reduce<number>((a, b) => a + (b ?? 0), 0);
+      const done = Object.entries(stage.goal.targets ?? {}).reduce<number>(
+        (a, [c, n]) => a + Math.min(collected[c] ?? 0, n ?? 0),
+        0,
+      );
+      return total > 0 && done / total >= 0.8;
+    }
+    if (stage.goal.type === "score") {
+      return stage.goal.targetScore != null && score / stage.goal.targetScore >= 0.8;
+    }
+    return false;
+  }, [status, stage, collected, score]);
+
+  const isAnimating = useGameSession.getState().isAnimating;
+
   if (!stage) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -99,17 +148,6 @@ export default function PlayRoute() {
       </SafeAreaView>
     );
   }
-
-  const goalProgress =
-    stage.goal.type === "collect"
-      ? Object.entries(stage.goal.targets ?? {}).map(([color, need]) => ({
-          color: color as PieceColor,
-          current: collected[color] ?? 0,
-          need: need ?? 0,
-        }))
-      : [];
-
-  const isAnimating = useGameSession.getState().isAnimating;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
@@ -135,6 +173,7 @@ export default function PlayRoute() {
         }
         goalProgress={goalProgress}
         chainCount={chainCount}
+        nearMiss={nearMiss}
       />
 
       <View style={styles.boardArea}>
@@ -168,6 +207,20 @@ export default function PlayRoute() {
         }}
       />
 
+      {/* Onboarding: special piece debut notice */}
+      {!debutDismissed && (
+        <SpecialDebutNotice
+          stageId={stageId}
+          onClose={() => setDebutDismissed(true)}
+        />
+      )}
+
+      <FreePlus5Modal
+        visible={showFreePlus5}
+        onAccept={applyFreePlus5}
+        onDecline={dismissFreePlus5}
+      />
+
       <ResultModal
         visible={status === "win" || status === "lose"}
         won={status === "win"}
@@ -183,6 +236,66 @@ export default function PlayRoute() {
     </SafeAreaView>
   );
 }
+
+function FreePlus5Modal({
+  visible,
+  onAccept,
+  onDecline,
+}: {
+  visible: boolean;
+  onAccept: () => void;
+  onDecline: () => void;
+}) {
+  if (!visible) return null;
+  return (
+    <Pressable style={freePlus5Styles.backdrop} onPress={onDecline}>
+      <View style={freePlus5Styles.card}>
+        <Text style={freePlus5Styles.emoji}>🐰</Text>
+        <Text style={freePlus5Styles.title}>あと少しだよ！</Text>
+        <Text style={freePlus5Styles.sub}>+5手 (今回だけ無料)</Text>
+        <Pressable
+          onPress={onAccept}
+          style={({ pressed }) => [freePlus5Styles.btn, pressed && { opacity: 0.75 }]}
+        >
+          <Text style={freePlus5Styles.btnText}>+5手 もらう！</Text>
+        </Pressable>
+        <Pressable onPress={onDecline}>
+          <Text style={freePlus5Styles.skip}>やめる</Text>
+        </Pressable>
+      </View>
+    </Pressable>
+  );
+}
+
+const freePlus5Styles = StyleSheet.create({
+  backdrop: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 32,
+  },
+  card: {
+    width: "100%",
+    maxWidth: 320,
+    backgroundColor: "white",
+    borderRadius: 24,
+    padding: 24,
+    alignItems: "center",
+    gap: 10,
+  },
+  emoji: { fontSize: 52 },
+  title: { fontSize: 22, fontWeight: "800", color: colors.accent },
+  sub: { fontSize: 14, color: colors.inkSoft },
+  btn: {
+    backgroundColor: colors.accent,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 22,
+  },
+  btnText: { color: "white", fontSize: 16, fontWeight: "700" },
+  skip: { fontSize: 13, color: colors.inkSoft, marginTop: 4 },
+});
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
