@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -8,6 +8,7 @@ import { BoardCanvas } from "@/features/game/render/board-canvas";
 import { BoardGestureLayer } from "@/features/game/render/board-gestures";
 import { Hud } from "@/features/game/render/hud";
 import { PauseModal, ResultModal } from "@/features/game/render/pause-modal";
+import { usePieceAnimations } from "@/features/game/render/use-piece-animations";
 import { findStage } from "@/features/game/stages/sample-stages";
 import { starsForScore, useGameSession } from "@/features/game/state/game-session.store";
 import type { PieceColor, Position } from "@/features/game/domain";
@@ -23,8 +24,10 @@ export default function PlayRoute() {
   const collected = useGameSession((s) => s.collected);
   const status = useGameSession((s) => s.status);
   const chainCount = useGameSession((s) => s.chainCount);
+  const lastEvents = useGameSession((s) => s.lastEvents);
   const startStage = useGameSession((s) => s.startStage);
   const trySwap = useGameSession((s) => s.trySwap);
+  const setAnimating = useGameSession((s) => s.setAnimating);
   const reset = useGameSession((s) => s.reset);
 
   const [selected, setSelected] = useState<Position | null>(null);
@@ -32,10 +35,30 @@ export default function PlayRoute() {
   const dims = useWindowDimensions();
   const boardSize = Math.min(dims.width - 24, 460);
 
+  const anims = usePieceAnimations();
+  const lastEventsRef = useRef(lastEvents);
+
+  // Trigger animation whenever lastEvents changes
   useEffect(() => {
-    if (stage) startStage(stage);
+    if (lastEvents === lastEventsRef.current) return;
+    lastEventsRef.current = lastEvents;
+
+    const wasAccepted = lastEvents.some((e) => e.type === "swap-attempt" && e.accepted);
+    if (!wasAccepted) return;
+
+    setAnimating(true);
+    anims.playTurnAnimation(lastEvents, () => {
+      setAnimating(false);
+    });
+  }, [lastEvents, anims, setAnimating]);
+
+  useEffect(() => {
+    if (stage) {
+      startStage(stage);
+      anims.resetAll();
+    }
     return () => reset();
-  }, [stage, startStage, reset]);
+  }, [stage, startStage, reset, anims]);
 
   if (!stage) {
     return (
@@ -60,7 +83,6 @@ export default function PlayRoute() {
     );
   }
 
-  const goalLabel = stage.goal.type === "score" ? "スコア目標" : "あつめよう";
   const goalProgress =
     stage.goal.type === "collect"
       ? Object.entries(stage.goal.targets ?? {}).map(([color, need]) => ({
@@ -70,15 +92,19 @@ export default function PlayRoute() {
         }))
       : [];
 
+  const isAnimating = useGameSession.getState().isAnimating;
+
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <View style={styles.header}>
-        <Pressable onPress={() => setPaused(true)} style={styles.pauseBtn} accessibilityRole="button">
+        <Pressable
+          onPress={() => setPaused(true)}
+          style={styles.pauseBtn}
+          accessibilityRole="button"
+        >
           <Text style={styles.pauseText}>‖</Text>
         </Pressable>
-        <Text style={styles.stageTag}>
-          ステージ {stage.id}
-        </Text>
+        <Text style={styles.stageTag}>ステージ {stage.id}</Text>
       </View>
 
       <Hud
@@ -88,7 +114,7 @@ export default function PlayRoute() {
         goalLabel={
           stage.goal.type === "score"
             ? `スコア ${stage.goal.targetScore ?? 0}`
-            : goalLabel
+            : "あつめよう"
         }
         goalProgress={goalProgress}
         chainCount={chainCount}
@@ -96,7 +122,7 @@ export default function PlayRoute() {
 
       <View style={styles.boardArea}>
         <View style={{ width: boardSize, height: boardSize }}>
-          <BoardCanvas board={board} size={boardSize} selected={selected} />
+          <BoardCanvas board={board} size={boardSize} selected={selected} anims={anims} />
           <BoardGestureLayer
             board={board}
             size={boardSize}
@@ -105,7 +131,7 @@ export default function PlayRoute() {
             onSwap={(a, b) => {
               trySwap(a, b);
             }}
-            disabled={status !== "playing"}
+            disabled={status !== "playing" || isAnimating}
           />
         </View>
       </View>
@@ -115,6 +141,7 @@ export default function PlayRoute() {
         onResume={() => setPaused(false)}
         onRetry={() => {
           setPaused(false);
+          anims.resetAll();
           startStage(stage);
           setSelected(null);
         }}
@@ -130,6 +157,7 @@ export default function PlayRoute() {
         score={score}
         stars={status === "win" ? starsForScore(stage.starThresholds, score) : 0}
         onRetry={() => {
+          anims.resetAll();
           startStage(stage);
           setSelected(null);
         }}
@@ -161,16 +189,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.accentSoft,
   },
-  pauseText: {
-    fontSize: 18,
-    color: colors.accent,
-    fontWeight: "800",
-  },
-  stageTag: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.inkSoft,
-  },
+  pauseText: { fontSize: 18, color: colors.accent, fontWeight: "800" },
+  stageTag: { fontSize: 14, fontWeight: "700", color: colors.inkSoft },
   boardArea: {
     flex: 1,
     alignItems: "center",
