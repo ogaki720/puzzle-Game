@@ -1,10 +1,9 @@
 import { Canvas, Circle, Group, RoundedRect } from "@shopify/react-native-skia";
 import { useDerivedValue } from "react-native-reanimated";
 import { useMemo } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import { colors } from "@/core/theme/colors";
-import { isSkiaReady } from "@/core/skia-web";
 import type { Board, Cell, Piece, PieceColor } from "@/features/game/domain";
 import type { PieceAnimations } from "./use-piece-animations";
 
@@ -24,15 +23,6 @@ export function BoardCanvas({ board, size, selected, anims }: BoardCanvasProps) 
   );
   const canvasW = cellSize * board.width;
   const canvasH = cellSize * board.height;
-
-  // Guard: on web, never render <Canvas> until CanvasKit WASM is initialized
-  if (Platform.OS === "web" && !isSkiaReady()) {
-    return (
-      <View style={[styles.wrap, { width: canvasW, height: canvasH }]}>
-        <FallbackGrid board={board} cellSize={cellSize} />
-      </View>
-    );
-  }
 
   return (
     <View style={[styles.wrap, { width: canvasW, height: canvasH }]}>
@@ -212,38 +202,6 @@ function AnimatedPiece({
   );
 }
 
-/** Plain RN View fallback rendered before CanvasKit WASM is ready on web */
-function FallbackGrid({ board, cellSize }: { board: Board; cellSize: number }) {
-  return (
-    <View style={{ flexDirection: "column" }}>
-      {board.grid.map((row, r) => (
-        <View key={r} style={{ flexDirection: "row" }}>
-          {row.map((cell, c) => (
-            <View
-              key={c}
-              style={{
-                width: cellSize,
-                height: cellSize,
-                padding: TILE_PAD / 2,
-              }}
-            >
-              {cell.tile !== "wall" && cell.tile !== "hole" && cell.piece?.color && (
-                <View
-                  style={{
-                    flex: 1,
-                    borderRadius: cellSize / 2,
-                    backgroundColor: colors.pieces[cell.piece.color as PieceColor],
-                    opacity: 0.85,
-                  }}
-                />
-              )}
-            </View>
-          ))}
-        </View>
-      ))}
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   wrap: {
